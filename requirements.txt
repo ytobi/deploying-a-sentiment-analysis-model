@@ -1,0 +1,8 @@
+torch==0.4.1.post2
+pandas==0.23.4
+numpy==1.15.4
+beautifulsoup4==4.7.1
+nltk==3.4.1
+sagemaker==1.20.3
+sagemaker_containers==2.4.9
+scikit_learn==0.21.1
