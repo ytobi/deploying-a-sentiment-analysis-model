@@ -3,7 +3,7 @@ import json
 import os
 import pickle
 import sys
-import sagemaker_containers
+# import sagemaker_containers
 import pandas as pd
 import numpy as np
 import torch
@@ -11,14 +11,12 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
 
-from model import LSTMClassifier
+from .model import LSTMClassifier
 
-from utils import review_to_words, convert_and_pad
+from .utils import review_to_words, convert_and_pad
 
 def model_fn(model_dir):
     """Load the PyTorch model from the `model_dir` directory."""
-    print("Loading model.")
-
     # First, load the parameters used to create the model.
     model_info = {}
     model_info_path = os.path.join(model_dir, 'model_info.pth')
@@ -43,18 +41,15 @@ def model_fn(model_dir):
 
     model.to(device).eval()
 
-    print("Done loading model.")
     return model
 
 def input_fn(serialized_input_data, content_type):
-    print('Deserializing the input data.')
     if content_type == 'text/plain':
         data = serialized_input_data.decode('utf-8')
         return data
     raise Exception('Requested unsupported ContentType in content_type: ' + content_type)
 
 def output_fn(prediction_output, accept):
-    print('Serializing the generated output.')
     return str(prediction_output)
 
 def predict_fn(input_data, model):
@@ -72,7 +67,7 @@ def predict_fn(input_data, model):
 
     data_X = None
     data_len = None
-    
+
     review_words = review_to_words(input_data)
     data_X, data_len = convert_and_pad(model.word_dict, review_words)
 
@@ -80,17 +75,15 @@ def predict_fn(input_data, model):
     # that our model expects input data of the form 'len, review[500]'.
     data_pack = np.hstack((data_len, data_X))
     data_pack = data_pack.reshape(1, -1)
-    
     review_data = torch.from_numpy(data_pack)
     review_data = review_data.to(device)
-
     # Make sure to put the model into evaluation mode
     model.eval()
-
     # TODO: Compute the result of applying the model to the input data. The variable `result` should
     #       be a numpy array which contains a single integer which is either 1 or 0
 
     output = model.forward(review_data)
     result = round(float(output))
+    
 
     return result

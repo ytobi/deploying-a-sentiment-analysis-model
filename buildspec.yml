@@ -1,0 +1,19 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: 3.8
+    commands:
+      # - aws s3 mb s3://udl-sentiment-analysis
+      - aws cloudformation package --template-file template.yaml --output-template-file packaged.yaml --s3-bucket udl-sentiment-analysis
+      # - aws s3 cp website/build/ s3://udl-sentiment-analysis-website --recursive
+      - docker login -u AWS -p $(aws ecr get-login-password --region us-east-1) 166023726221.dkr.ecr.us-east-1.amazonaws.com
+      - docker build -t udl-sentiment-analysis .
+      - docker tag udl-sentiment-analysis:latest 166023726221.dkr.ecr.us-east-1.amazonaws.com/udl-sentiment-analysis:latest
+      - docker push 166023726221.dkr.ecr.us-east-1.amazonaws.com/udl-sentiment-analysis:latest
+      # - aws cloudformation deploy     --template-file packaged.yaml     --stack-name udl-sentiment-analysis     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM     --parameter-overrides MyParameterSample=MySampleValue
+artifacts:
+  type: zip
+  files:
+    - template.yaml
+    - packaged.yaml

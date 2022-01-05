@@ -1,0 +1,233 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Reseour defination for setiment analysis model
+
+Parameters:
+  Env:
+    Type: String
+    AllowedValues:
+      - develop
+      - staging
+      - production
+    Default: develop
+    Description: 'Define the environment to deploy. Accepted values are "develop", "staging" and "production"'
+  Region:
+    Default: us-east-1
+    Description: "Define the AWS region"
+    Type: String
+  StackName:
+    Default: udl-sentiment-analysis
+    Description: "Define the CloudFormation stack"
+    Type: String
+Resources:
+  # SentimentAnalysisRepository:
+  #   Type: AWS::ECR::Repository
+  #   Properties:
+  #     RepositoryName: udl-sentiment-analysis
+  SentimentAnalysisWebsite:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      AccessControl: PublicRead
+      BucketName: udl-sentiment-analysis-website
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 4xx.html
+      VersioningConfiguration:
+        Status: Enabled
+  S3FrontednBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: SentimentAnalysisWebsite
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - S3:GetObject
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - Ref: SentimentAnalysisWebsite
+                  - /*
+            Principal: "*"
+  # SetimentAnalysisRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: udl-sentiment-analysis-2
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service:
+  #               - lambda.amazonaws.com
+  #           Resource: "*"
+  #           Action:
+  #             - "cloudformation:DescribeStacks"
+  #             - "cloudformation:ListStackResources"
+  #             - "cloudwatch:ListMetrics"
+  #             - "cloudwatch:GetMetricData"
+  #             - "ec2:DescribeSecurityGroups"
+  #             - "ec2:DescribeSubnets"
+  #             - "ec2:DescribeVpcs"
+  #             - "kms:ListAliases"
+  #             - "iam:*"
+  #             - "lambda:*"
+  #             - "logs:DescribeLogGroups"
+  #             - "states:DescribeStateMachine"
+  #             - "states:ListStateMachines"
+  #             - "tag:GetResources"
+  #             - "xray:GetTraceSummaries"
+  #             - "xray:BatchGetTraces"
+  # Description: String
+  # ManagedPolicyArns:
+  #   - String
+  # MaxSessionDuration: Integer
+  # Path: String
+  # PermissionsBoundary: String
+  # Policies:
+  #   - !Ref SentimentAnalysisPolicy
+  # Tags:
+  #   - Tag
+  # SentimentAnalysisPolicy:
+  #   Type: "AWS::IAM::Policy"
+  #   Properties:
+  #     PolicyName: "udl-sentiment-analysis"
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: "Allow"
+  #           Action: "*"
+  #           Resource: "*"
+  #     Roles:
+  #       - Ref: SetimentAnalysisRole
+  SentimentAnalysisLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      PackageType: Image
+      FunctionName: udl-sentiment-analysis
+      Timeout: 120
+      MemorySize: 2028
+      Code:
+        ImageUri: "166023726221.dkr.ecr.us-east-1.amazonaws.com/udl-sentiment-analysis:latest"
+      Role: arn:aws:iam::166023726221:role/udl-sentiment-analysis
+  SentimentAnalysisLambdaHttpApi:
+    Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Delete
+    Properties:
+      Description: Lambda proxy for udl-sentiment-analysis
+      Name: udl-sentiment-analysis
+      Parameters:
+        endpointConfigurationTypes: REGIONAL
+      Body:
+        openapi: 3.0.0
+        info:
+          version: 0.1
+          title: "UDL Sentiment Analysis API"
+        basePath: /v0.1
+        schemes:
+          - https
+        x-amazon-apigateway-policy:
+          Version: 2012-10-17
+          Statement:
+            - Action:
+                - "execute-api:Invoke"
+              Effect: Allow
+              Principal: "*"
+              Resource:
+                - execute-api:/*/*/*
+              # Condition:
+              #   IpAddress:
+              #     "aws:SourceIp": "arn:aws:execute-api:us-east-1:166023726221:*"
+        paths:
+          /analyse:
+            post:
+              x-amazon-apigateway-integration:
+                uri:
+                  !Join [
+                    "",
+                    [
+                      "arn:aws:apigateway:",
+                      !Ref Region,
+                      ":lambda:path/2015-03-31/functions/",
+                      !GetAtt SentimentAnalysisLambda.Arn,
+                      "/invocations",
+                    ],
+                  ]
+                responses:
+                  default:
+                    statusCode: "200"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                contentHandling: "CONVERT_TO_TEXT"
+                type: aws
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        review:
+                          type: string
+              responses:
+                "200":
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        properties:
+                          sentiment:
+                            type: string
+                            example: "0.5"
+                          review:
+                            type: string
+                "500":
+                  description: Server Error
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+              options:
+                consumes:
+                  - application/json
+                produces:
+                  - application/json
+                responses:
+                  "200":
+                    description: "OK"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: string
+                      Access-Control-Allow-Methods:
+                        type: string
+                      Access-Control-Allow-Headers:
+                        type: string
+                  "500":
+                    description: "ERROR"
+                    headers:
+                      Access-Control-Allow-Origin:
+                        type: string
+                      Access-Control-Allow-Methods:
+                        type: string
+                      Access-Control-Allow-Headers:
+                        type: string
+  SentimentAnalysisLambdaApiStage:
+    Type: AWS::ApiGateway::Stage
+    DeletionPolicy: Delete
+    Properties:
+      DeploymentId: !Ref SentimentAnalysisLambdaApiDeployment
+      Description: UDL Sentiment Analysis Stage v0
+      RestApiId: !Ref SentimentAnalysisLambdaHttpApi
+      StageName: "v1"
+
+  SentimentAnalysisLambdaApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DeletionPolicy: Delete
+    Properties:
+      Description: UDL Sentiment Analysis API Deployment
+      RestApiId: !Ref SentimentAnalysisLambdaHttpApi
